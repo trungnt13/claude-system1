@@ -1,39 +1,87 @@
 {
   "name": "tngo-adaptive-effort",
   "version": "0.1.0",
-  "description": "ASM-style adaptive reasoning effort chosen per model step by a native Claude classifier.",
-  "author": { "name": "tngo-workflow" },
+  "description": "ASM adaptive reasoning effort chosen per model step by TypeSafe Jev or the OpenAI Decision API.",
+  "author": {
+    "name": "tngo-workflow"
+  },
   "userConfig": {
-    "controllerModel": {
-      "type": "string", "title": "Controller model", "default": "haiku",
-      "description": "Model alias or id for the extra classification request; billed to the session's account."
+    "profile": {
+      "type": "string",
+      "title": "Decision profile",
+      "default": "jev",
+      "options": [
+        "jev",
+        "decision_api"
+      ],
+      "description": "jev: TypeSafe jev-latest with JEV_API_KEY; decision_api: OpenAI gpt-6-luna with DECISION_API_KEY."
+    },
+    "enabled": {
+      "type": "boolean",
+      "title": "Enabled at start",
+      "default": true,
+      "description": "Start each session with adaptation on; every decision is a paid request to the profile's service."
     },
     "minEffort": {
-      "type": "string", "title": "Lowest effort", "default": "low", "options": ["low", "medium", "high", "xhigh"],
+      "type": "string",
+      "title": "Lowest effort",
+      "default": "low",
+      "options": [
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
       "description": "Lowest effort the controller may choose."
     },
     "maxEffort": {
-      "type": "string", "title": "Highest effort", "default": "xhigh", "options": ["low", "medium", "high", "xhigh"],
+      "type": "string",
+      "title": "Highest effort",
+      "default": "xhigh",
+      "options": [
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
       "description": "Highest effort the controller may choose; max is excluded by policy."
     },
     "turnInterval": {
-      "type": "number", "title": "Turn interval", "default": 1, "min": 1, "max": 100,
+      "type": "number",
+      "title": "Turn interval",
+      "default": 1,
+      "min": 1,
+      "max": 100,
       "description": "Decide on turns 1, 1+N, 1+2N of each loop."
     },
     "stepInterval": {
-      "type": "number", "title": "Step interval", "default": 2, "min": 1, "max": 100,
+      "type": "number",
+      "title": "Step interval",
+      "default": 2,
+      "min": 1,
+      "max": 100,
       "description": "Model steps between accepted decisions within a selected turn."
     },
     "timeoutMs": {
-      "type": "number", "title": "Decision deadline (ms)", "default": 2000, "min": 200, "max": 30000,
+      "type": "number",
+      "title": "Decision deadline (ms)",
+      "default": 2000,
+      "min": 1,
+      "max": 5000,
       "description": "Wait at most this long, then keep the current effort."
     },
     "evidenceBytes": {
-      "type": "number", "title": "Evidence budget (bytes)", "default": 8192, "min": 1024, "max": 32768,
+      "type": "number",
+      "title": "Evidence budget (bytes)",
+      "default": 8192,
+      "min": 128,
+      "max": 32768,
       "description": "UTF-8 bytes of task and recent conversation sent to the controller."
     },
     "subagents": {
-      "type": "boolean", "title": "Adapt subagents", "default": false,
+      "type": "boolean",
+      "title": "Adapt subagents",
+      "default": false,
       "description": "Subagents inherit the main loop's on/off state once, at their first step."
     }
   }
