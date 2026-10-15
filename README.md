@@ -5,10 +5,10 @@ A Claude Code mod that ports ASM adaptive reasoning. Before selected model steps
 ## Start
 
 ```bash
-claude --plugin-dir ~/codes/claude-ada-think-v2
+claude --plugin-dir ~/codes/claude-system1
 ```
 
-Export the selected profile's key in the environment that starts Claude. A Claude launched from the desktop app does not read `~/.bashrc`. There, a missing key blocks adaptation, and the status line shows `auto effort blocked: … JEV_API_KEY is missing or empty`. Adaptation is on at start, matching ASM's `enabled = true`; turn this off with the `enabled` option. `/autoeffort` toggles adaptation; `/autoeffort on|off|status` sets or reports it. After each accepted decision the status line shows `effort <level> · auto`. `/clear` keeps the on/off choice.
+Export the selected profile's key in the environment that starts Claude. A Claude launched from the desktop app does not read `~/.bashrc`. There, a missing key blocks adaptation, and the status line shows `auto effort blocked: … JEV_API_KEY is missing or empty`. Adaptation is on at start, matching ASM's `enabled = true`; turn this off with the `enabled` option. `/system1` toggles adaptation; `/system1 on|off|status` sets or reports it. After each accepted decision the status line shows `effort <level> · auto`. `/clear` keeps the on/off choice.
 
 | Profile | Endpoint | Model | Key variable | Wire format |
 |---|---|---|---|---|
@@ -30,7 +30,7 @@ Every decision is a paid request, and bounded conversation excerpts leave Claude
 | A failure keeps the current effort; cooldown 1, 2, 4, 8, 16, 30 s. Missing credentials and other 4xx errors block until off→on | Same. Timeout, transport errors, 408/429, 5xx, oversized replies and invalid answers are transient |
 | The probe is released at its deadline; stale results (toggle, manual change, cancellation) are discarded and not counted as failures | The wait ends at the deadline and the next due step after cooldown asks again; a generation counter and the step's abort signal discard stale results |
 | An applied manual model or effort change pauses adaptation | While on, a native model or effort that differs from the previous step pauses it (`/model`, `/effort`, settings, or an engine fallback model). Enabling takes a fresh baseline |
-| Children inherit the parent's enabled flag once, then own their state | `subagents` option, default off because subagent profiles pin their effort deliberately. `/autoeffort off` reaches every loop, since subagents have no toggle of their own |
+| Children inherit the parent's enabled flag once, then own their state | `subagents` option, default off because subagent profiles pin their effort deliberately. `/system1 off` reaches every loop, since subagents have no toggle of their own |
 | Cache-preserving positional effort control | Provided by Claude Code itself; see below |
 
 ## Cache behavior (measured)
@@ -84,5 +84,5 @@ python3 -I scripts/wire_proxy.py 18765 /tmp/wire.log
 ```
 
 ```bash
-ANTHROPIC_BASE_URL=http://127.0.0.1:18765 python3 -I scripts/drive_turns.py claude -p --model claude-opus-5-5 --plugin-dir . --input-format stream-json --output-format stream-json --verbose '["/autoeffort status", "Read README.md and summarize it in one line.", "/autoeffort status"]'
+ANTHROPIC_BASE_URL=http://127.0.0.1:18765 python3 -I scripts/drive_turns.py claude -p --model claude-opus-5-5 --plugin-dir . --input-format stream-json --output-format stream-json --verbose '["/system1 status", "Read README.md and summarize it in one line.", "/system1 status"]'
 ```

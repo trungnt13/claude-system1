@@ -217,13 +217,13 @@ export const register: Register = (on, options) => {
 
   on('session.start', async ($, event, next) => {
     await $.command.register({
-      name: 'autoeffort', description: 'Toggle ASM adaptive effort; paid Jev or Decision API requests when on.',
+      name: 'system1', description: 'Toggle ASM adaptive effort; paid Jev or Decision API requests when on.',
       argumentHint: '[on|off|status]', immediate: true,
     });
     return next(event);
   });
 
-  on('command.run', { command: 'autoeffort' }, async ($, event) => {
+  on('command.run', { command: 'system1' }, async ($, event) => {
     const loop = mainLoop();
     const action = event.args.trim() || (loop.isEnabled || loop.blockReason !== undefined ? 'off' : 'on');
     if (action === 'on' && boundedChoices.length < 2) {
@@ -237,7 +237,7 @@ export const register: Register = (on, options) => {
       setAllEnabled(false, 'disabled; native effort restored');
       $.ui.status(undefined);
     } else if (action !== 'status') {
-      return { text: 'Usage: /autoeffort [on|off|status]; no argument toggles.' };
+      return { text: 'Usage: /system1 [on|off|status]; no argument toggles.' };
     }
     return { text: describeLoop(loop) };
   });
@@ -319,7 +319,7 @@ export const register: Register = (on, options) => {
               if (loopId === MAIN_LOOP) $.ui.status(`effort ${result.choice} · auto`);
             } else if (result.isPermanent) {
               loop.blockReason = `${profile.name}: ${result.failure}`;
-              loop.outcome = `${loop.blockReason}; run /autoeffort on after fixing it`;
+              loop.outcome = `${loop.blockReason}; run /system1 on after fixing it`;
               if (loopId === MAIN_LOOP) $.ui.status(`auto effort blocked: ${loop.blockReason}`);
             } else {
               recordFailure(loop, completedAt, `${profile.name}: ${result.failure}`);
