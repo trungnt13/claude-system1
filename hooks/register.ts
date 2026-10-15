@@ -246,7 +246,7 @@ export const register: Register = (on, options) => {
           const apiKey = await readApiKey($, profile);
           if (!isCurrent()) return;
           if (apiKey === undefined || apiKey.trim() === '') {
-            $.ui.log(`System1 Thinking: on · ${profile.name} · warmup skipped (${profile.apiKeyEnv} missing). /system1 status`);
+            $.ui.toast(`System1 Thinking: on · ${profile.name} · warmup skipped (${profile.apiKeyEnv} missing). /system1 status`);
             return;
           }
           const text = 'Hello world. This is a startup warmup.';
@@ -261,14 +261,14 @@ export const register: Register = (on, options) => {
           });
           if (isCurrent()) {
             const status = response.status >= 200 && response.status < 300 ? 'succeeded' : `failed (HTTP ${response.status})`;
-            $.ui.log(`System1 Thinking: on · ${profile.name} · warmup ${status}. /system1 status`);
+            $.ui.toast(`System1 Thinking: on · ${profile.name} · warmup ${status}. /system1 status`);
           }
         } catch {
-          if (isCurrent()) $.ui.log(`System1 Thinking: on · ${profile.name} · warmup failed (transport error). /system1 status`);
+          if (isCurrent()) $.ui.toast(`System1 Thinking: on · ${profile.name} · warmup failed (transport error). /system1 status`);
         }
       });
     } else {
-      $.ui.log('System1 Thinking: off · warmup skipped. /system1 on');
+      $.ui.toast('System1 Thinking: off · warmup skipped. /system1 on');
     }
     return next(event);
   });

@@ -7,7 +7,7 @@ System1 Thinking chooses Claude Code reasoning effort before selected model requ
   - Desktop launches do not read `~/.bashrc`.
   - Enabled startup schedules one background warmup request, without conversation content.
   - Warmup may incur charges; failures never alter decisions or delay startup.
-  - One startup notice reports enabled state and warmup success, failure, or skipped status.
+  - A four-second startup toast reports enabled state and warmup success, failure, or skipped status.
   - An immediate first turn does not wait for warmup completion.
 
   **Marketplace installation**
