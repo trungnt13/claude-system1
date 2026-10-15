@@ -244,21 +244,31 @@ export const register: Register = (on, options) => {
         try {
           if (!isCurrent()) return;
           const apiKey = await readApiKey($, profile);
-          if (apiKey === undefined || apiKey.trim() === '' || !isCurrent()) return;
+          if (!isCurrent()) return;
+          if (apiKey === undefined || apiKey.trim() === '') {
+            $.ui.log(`System1 Thinking: on · ${profile.name} · warmup skipped (${profile.apiKeyEnv} missing). /system1 status`);
+            return;
+          }
           const text = 'Hello world. This is a startup warmup.';
           const instructions = 'Is this a greeting?';
           const body = profile.protocol === 'typesafe'
             ? { model: profile.model, state: text, questions: { warmup: { type: 'noul', instructions } } }
             : { model: profile.model, input: [{ role: 'user', content: [{ type: 'input_text', text }] }],
               questions: [{ type: 'choice', name: 'warmup', instructions, choices: [{ value: 'yes' }, { value: 'no' }] }] };
-          await $.http.fetch(profile.url, {
+          const response = await $.http.fetch(profile.url, {
             method: 'POST', headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
             body: JSON.stringify(body),
           });
+          if (isCurrent()) {
+            const status = response.status >= 200 && response.status < 300 ? 'succeeded' : `failed (HTTP ${response.status})`;
+            $.ui.log(`System1 Thinking: on · ${profile.name} · warmup ${status}. /system1 status`);
+          }
         } catch {
-          // Warmup failures must never affect turn decisions.
+          if (isCurrent()) $.ui.log(`System1 Thinking: on · ${profile.name} · warmup failed (transport error). /system1 status`);
         }
       });
+    } else {
+      $.ui.log('System1 Thinking: off · warmup skipped. /system1 on');
     }
     return next(event);
   });
