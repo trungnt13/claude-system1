@@ -70,7 +70,3 @@ System1 Thinking chooses Claude Code reasoning effort before selected model requ
 - Validated on Claude Code 2.1.296: strict compilation, plugin validation, and offline checks.
   - Headless runs confirmed effort propagation and cache preservation; recheck after upgrades.
   - Desktop, interactive use, subagents, and real-work decision quality remain unverified.
-- Diagnostic scripts send real requests and may expose sensitive text in output.
-  - `scripts/drive_turns.py` separates prompts into turns.
-  - `scripts/wire_proxy.py` logs metadata and complete system messages while forwarding requests to Anthropic.
-  - Keep logs private and outside the repository.
