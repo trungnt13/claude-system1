@@ -5,6 +5,9 @@ System1 Thinking chooses Claude Code reasoning effort before selected model requ
 - Export `JEV_API_KEY`, then load the plugin.
   - Enabled by default; provider requests may incur charges.
   - Desktop launches do not read `~/.bashrc`.
+  - Enabled startup schedules one background warmup request, without conversation content.
+  - Warmup may incur charges; failures never alter decisions or delay startup.
+  - An immediate first turn does not wait for warmup completion.
 
   ```bash
   claude --plugin-dir ~/codes/claude-system1
