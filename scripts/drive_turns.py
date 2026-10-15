@@ -1,4 +1,4 @@
-"""Send stream-json user messages to `claude -p` one at a time, waiting for each result."""
+"""Keep headless prompts in separate turns by waiting for each result."""
 import json
 import subprocess
 import sys

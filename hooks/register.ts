@@ -7,7 +7,7 @@ type NativeEffort = Effort | 'max' | number | undefined;
 const EFFORT_LEVELS: readonly Effort[] = ['low', 'medium', 'high', 'xhigh'];
 const MAIN_LOOP = 'main';
 const RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 16000, 30000];
-// ASM's default rubric, verbatim; sent as the decision question's instructions.
+// Default rubric sent as the decision question's instructions.
 const RUBRIC = `Choose the lowest supported reasoning effort sufficient for the next model step. \
 Consider interdependent constraints, unresolved uncertainty, and the consequences of mistakes. \
 Raise effort for difficult reasoning; lower it for routine execution or reporting after decisions are settled. \
@@ -35,7 +35,7 @@ type LoopState = {
   outcome: string;
 };
 
-// ---- Evidence (UTF-8 bounded, newest first, as ASM collects it) ----
+// Keep recent evidence within the UTF-8 byte budget.
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -67,7 +67,7 @@ function isAdaptableEffort(effort: NativeEffort): effort is Effort {
   return typeof effort === 'string' && effort !== 'max';
 }
 
-// ---- Decision services: ASM's TypeSafe and OpenAI Decision API wire formats ----
+// Support TypeSafe and OpenAI Decision API wire formats.
 
 type ApiKeyEnv = 'JEV_API_KEY' | 'DECISION_API_KEY' | 'SYSTEM1_API_KEY';
 type DecisionProfile = { name: string; protocol: 'typesafe' | 'openai'; url: string; model: string; apiKeyEnv: ApiKeyEnv };
@@ -135,7 +135,8 @@ function resolveRubric(value: unknown): string {
   return value;
 }
 
-// ASM caps each input item at 8 KiB, preferring to end a cut item at a line break.
+// Cap input items at 8 KiB.
+// Prefer line boundaries when splitting.
 function splitInputItems(input: string): string[] {
   const items: string[] = [];
   for (let rest = input; rest !== '';) {
@@ -162,7 +163,7 @@ function buildDecisionBody(profile: DecisionProfile, input: string, choices: rea
     });
 }
 
-/** Accepts exactly one `reasoning_effort` choice answer naming a supplied choice, as ASM does. */
+/** Reject ambiguous answers and choices outside the supplied set. */
 function parseDecisionAnswer(profile: DecisionProfile, text: string, choices: readonly Effort[]): Effort | undefined {
   let body: unknown;
   try {
@@ -183,7 +184,7 @@ function parseDecisionAnswer(profile: DecisionProfile, text: string, choices: re
   return type === 'choice' ? choices.find(allowed => allowed === choice) : undefined;
 }
 
-/** Classifies like ASM: other 4xx statuses are permanent; transport, timeout, 408/429, 5xx and bad answers are transient. */
+/** Block on permanent client errors and allow retries after transient failures. */
 function classifyDecisionResponse(profile: DecisionProfile, status: number, text: string, choices: readonly Effort[]): DecisionResult {
   if (status < 200 || status >= 300) return { failure: `HTTP ${status}`, isPermanent: status >= 400 && status < 500 && status !== 408 && status !== 429 };
   if (encoder.encode(text).length > MAX_RESPONSE_BYTES) return { failure: 'response exceeds 16 KiB', isPermanent: false };
@@ -193,7 +194,8 @@ function classifyDecisionResponse(profile: DecisionProfile, status: number, text
 
 type DecisionSettings = { profile: DecisionProfile; choices: readonly Effort[]; timeoutMs: number; rubricInstructions: string };
 
-// Bounds the wait locally: the host fetch takes no abort signal, so a late answer is discarded, not cancelled.
+// Bound the local wait because host fetch cannot accept an abort signal.
+// Discard late answers without cancelling their requests.
 async function requestDecision(
   $: EngineInterface, settings: DecisionSettings, apiKey: string, input: string, signal: AbortSignal,
 ): Promise<DecisionResult> {
@@ -243,8 +245,8 @@ export const register: Register = (on, options) => {
     return loop;
   }
 
-  // Toggling resets recovery and makes the next eligible step due, as ASM's off→on does.
-  // Enabling also drops the native baseline: only changes made while on count as manual pauses.
+  // Toggling resets recovery and makes the next eligible step due.
+  // Clear the baseline so changes made while disabled cannot trigger manual pauses.
   function setEnabled(loop: LoopState, isEnabled: boolean, outcome: string): void {
     Object.assign(loop, {
       isEnabled, generation: loop.generation + 1, effort: undefined, acceptedStep: undefined, isDecisionDue: isEnabled,
@@ -302,7 +304,8 @@ export const register: Register = (on, options) => {
     return next(event);
   });
 
-  // A prompt folded into the running main turn is that turn's steer, as in ASM; `wait` prompts start the next turn.
+  // Capture steering prompts folded into the running main turn.
+  // Waiting prompts start another turn.
   on('prompt.submit', async ($, event, next) => {
     const entered = await next(event);
     const loop = loops.get(MAIN_LOOP);
@@ -313,7 +316,8 @@ export const register: Register = (on, options) => {
     return entered;
   });
 
-  // /clear keeps the user's on/off choice; any other new session (e.g. /resume) takes the start default.
+  // Preserve the enabled choice across /clear.
+  // Other session endings restore the startup default.
   on('session.end', async ($, event, next) => {
     const keptEnabled = event.reason === 'clear' ? mainLoop().isEnabled : undefined;
     loops.clear();
@@ -328,7 +332,8 @@ export const register: Register = (on, options) => {
     if (event.agentId !== undefined && !loops.has(loopId)) loops.set(loopId, createLoop(adaptsSubagents && mainLoop().isEnabled));
     const loop = loopId === MAIN_LOOP ? mainLoop() : loops.get(loopId)!;
 
-    // ASM keeps cadence, evidence and the accepted effort per turn: each turn starts at native effort.
+    // Reset turn-local evidence and cadence.
+    // Each turn starts at native effort.
     if (loop.turnId !== event.turnId) {
       Object.assign(loop, { turnId: event.turnId, turnCount: loop.turnCount + 1, acceptedStep: undefined, steer: '' });
       loop.isTurnSelected = (loop.turnCount - 1) % turnInterval === 0;
@@ -338,14 +343,14 @@ export const register: Register = (on, options) => {
       loop.effort = undefined;
     }
 
-    // Any applied manual model or effort change (/model, /effort, settings) pauses adaptation instead of being overwritten.
+    // Respect manual model and effort changes by pausing adaptation.
     if (loop.isEnabled && loop.nativeModel !== undefined && (event.model !== loop.nativeModel || event.effort !== loop.nativeEffort)) {
       setEnabled(loop, false, `paused: native setting changed to ${event.model}/${event.effort ?? 'none'}`);
       if (loopId === MAIN_LOOP) $.ui.status(undefined);
     }
     Object.assign(loop, { nativeModel: event.model, nativeEffort: event.effort });
 
-    // Only ordinary named levels are replaced; a model without effort keeps its request unchanged.
+    // Preserve requests without an adjustable named effort level.
     const isDue = loop.isDecisionDue
       || (loop.isTurnSelected && (loop.acceptedStep === undefined || event.index - loop.acceptedStep >= stepInterval));
     if (!loop.isEnabled || !isAdaptableEffort(event.effort)) return yield* next(event);
@@ -354,10 +359,11 @@ export const register: Register = (on, options) => {
       const generation = loop.generation;
       const rows = event.agentId === undefined ? await $.session.messages() : await $.session.messages({ agentId: event.agentId });
       if (Array.isArray(rows)) {
-        // Continuations and subagent assignments carry no turn text: use the newest user message, as ASM does.
+        // Recover missing turn text from the newest user message.
         if (loop.task === '') loop.task = truncateUtf8(rows.findLast(row => row.role === 'user' && row.text !== '')?.text ?? '', evidenceBytes / 3);
         if (loop.task !== '' && generation === loop.generation && !next.signal.aborted) {
-          // Missing credentials block until off→on, as in ASM; there is no fallback provider.
+          // Missing credentials block decisions until re-enabled.
+          // Never switch providers after failure.
           // The host lists the variables a mod reads, so each name is a literal.
           const apiKey = profile.apiKeyEnv === 'JEV_API_KEY' ? await $.env.get('JEV_API_KEY')
             : profile.apiKeyEnv === 'DECISION_API_KEY' ? await $.env.get('DECISION_API_KEY') : await $.env.get('SYSTEM1_API_KEY');
@@ -367,7 +373,8 @@ export const register: Register = (on, options) => {
             result = await requestDecision($, decisionSettings, apiKey, collectEvidence(loop, rows, evidenceBytes), next.signal);
           }
           const completedAt = await $.clock.now();
-          // A toggle, manual change or interrupt while waiting makes the result stale; stale is not a failure.
+          // Ignore stale results after toggles, manual changes, or interruptions.
+          // Discarded results do not count as failures.
           if (generation === loop.generation && !next.signal.aborted && !('isCancelled' in result)) {
             if ('choice' in result) {
               Object.assign(loop, { effort: result.choice, acceptedStep: event.index, isDecisionDue: false, failureCount: 0, retryAt: 0 });

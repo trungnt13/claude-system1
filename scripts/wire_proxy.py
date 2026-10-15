@@ -1,4 +1,8 @@
-"""Pass-through HTTP proxy to api.anthropic.com that logs effort-related request fields."""
+"""Inspect effort changes while forwarding requests to Anthropic.
+
+- Logs include complete system-role messages.
+- Keep logs private because system content may contain secrets.
+"""
 import http.client
 import http.server
 import json
