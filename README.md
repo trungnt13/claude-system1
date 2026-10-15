@@ -5,7 +5,7 @@ A Claude Code mod that ports ASM adaptive reasoning. Before selected model steps
 ## Start
 
 ```bash
-claude --plugin-dir ./claude/mods/adaptive-effort
+claude --plugin-dir ~/codes/claude-ada-think-v2
 ```
 
 Export the selected profile's key in the environment that starts Claude. A Claude launched from the desktop app does not read `~/.bashrc`. There, a missing key blocks adaptation, and the status line shows `auto effort blocked: … JEV_API_KEY is missing or empty`. Adaptation is on at start, matching ASM's `enabled = true`; turn this off with the `enabled` option. `/autoeffort` toggles adaptation; `/autoeffort on|off|status` sets or reports it. After each accepted decision the status line shows `effort <level> · auto`. `/clear` keeps the on/off choice.
@@ -65,9 +65,24 @@ In a proxied run (Opus 5.5, medium → high at step 2), the switching request re
 
 ## Validation (2026-10-15, Claude Code 2.1.296)
 
-- `claude plugin validate ./claude/mods/adaptive-effort --strict` passes. Strict `tsc` against the build's declarations passes.
+- `claude plugin validate . --strict` passes. Strict `tsc` against the build's declarations passes.
 - Live headless multi-turn runs (Opus 5.5 main model):
   - `jev`: on at start; answers in 223–406 ms; chose `low` for file reads and `high` for a memory-ordering question.
   - `decision_api`: answers in 410–1,784 ms; chose `low` throughout, including for a short proof.
 - Verified live: cadence, per-turn reset, the manual-change pause and the missing-key block. The chosen effort was confirmed on the wire. The deadline race was checked against a local stub that held a request for 7 s: the step timed out at 2 s and the late answer was discarded.
 - Not verified: interactive terminal and desktop use, subagents, error paths against the real services, and decision quality on real work.
+
+## Test scripts
+
+The validation runs used two standard-library Python scripts. They send real, billed requests to Anthropic and, while adaptation is on, to the decision service.
+
+- [`scripts/drive_turns.py`](scripts/drive_turns.py) runs a multi-turn headless session. It sends each stream-json message only after the previous `result`, so prompts are not folded into one turn.
+- [`scripts/wire_proxy.py`](scripts/wire_proxy.py) is a local pass-through proxy to `api.anthropic.com`. It logs each request's model, beta header, `output_config` and system-role effort messages, never credentials.
+
+```bash
+python3 -I scripts/wire_proxy.py 18765 /tmp/wire.log
+```
+
+```bash
+ANTHROPIC_BASE_URL=http://127.0.0.1:18765 python3 -I scripts/drive_turns.py claude -p --model claude-opus-5-5 --plugin-dir . --input-format stream-json --output-format stream-json --verbose '["/autoeffort status", "Read README.md and summarize it in one line.", "/autoeffort status"]'
+```
