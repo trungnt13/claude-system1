@@ -66,7 +66,7 @@ function isAdaptableEffort(effort: NativeEffort): effort is Effort {
 }
 
 
-type ApiKeyEnv = 'JEV_API_KEY' | 'DECISION_API_KEY' | 'SYSTEM1_API_KEY';
+type ApiKeyEnv = 'JEV_API_KEY' | 'DECISION_API_KEY';
 type DecisionProfile = { name: string; protocol: 'typesafe' | 'openai'; url: string; model: string; apiKeyEnv: ApiKeyEnv };
 type DecisionResult = { choice: Effort } | { failure: string; isPermanent: boolean } | { isCancelled: true };
 
@@ -79,49 +79,10 @@ const DECISION_API_PROFILE: DecisionProfile = {
 const MAX_INPUT_ITEM_BYTES = 8192;
 const MAX_RESPONSE_BYTES = 16 * 1024;
 
-function resolveProfile(rawProfiles: unknown, selected: unknown): DecisionProfile {
-  if (typeof rawProfiles !== 'string') throw new Error('System1 Thinking: profiles must be a JSON object string.');
-  let profiles: unknown;
-  try {
-    profiles = JSON.parse(rawProfiles);
-  } catch {
-    throw new Error('System1 Thinking: profiles must be valid JSON.');
-  }
-  if (profiles === null || typeof profiles !== 'object' || Array.isArray(profiles)) {
-    throw new Error('System1 Thinking: profiles must contain a JSON object.');
-  }
-  const resolved = new Map<string, DecisionProfile>([['jev', JEV_PROFILE], ['decision_api', DECISION_API_PROFILE]]);
-  for (const [name, value] of Object.entries(profiles)) {
-    if (name.trim() === '' || value === null || typeof value !== 'object' || Array.isArray(value)) {
-      throw new Error('System1 Thinking: each profile needs a nonblank name and an object definition.');
-    }
-    const entry = value as Record<string, unknown>;
-    if (Object.keys(entry).some(key => !['protocol', 'model', 'api_key_env', 'endpoint'].includes(key))) {
-      throw new Error('System1 Thinking: unsupported profile field; credentials belong in environment variables.');
-    }
-    const { protocol, model, api_key_env: apiKeyEnv, endpoint } = entry;
-    if ((protocol !== 'typesafe' && protocol !== 'openai') || typeof model !== 'string' || model.trim() === ''
-      || (apiKeyEnv !== 'JEV_API_KEY' && apiKeyEnv !== 'DECISION_API_KEY' && apiKeyEnv !== 'SYSTEM1_API_KEY')) {
-      throw new Error('System1 Thinking: profiles require protocol (typesafe/openai), a nonblank model, and api_key_env (JEV_API_KEY/DECISION_API_KEY/SYSTEM1_API_KEY).');
-    }
-    if (endpoint !== undefined && (typeof endpoint !== 'string' || !/^https:\/\//i.test(endpoint))) {
-      throw new Error('System1 Thinking: profile endpoint must be a full HTTPS URL.');
-    }
-    let url: URL;
-    try {
-      url = new URL((endpoint as string | undefined) ?? (protocol === 'typesafe' ? JEV_PROFILE.url : DECISION_API_PROFILE.url));
-    } catch {
-      throw new Error('System1 Thinking: profile endpoint must be a full HTTPS URL.');
-    }
-    if (url.protocol !== 'https:' || url.username !== '' || url.password !== '' || url.hash !== '' || url.href.includes('#')) {
-      throw new Error('System1 Thinking: profile endpoint must use HTTPS without URL credentials or a fragment.');
-    }
-    resolved.set(name, { name, protocol, model, apiKeyEnv, url: url.href });
-  }
-  if (typeof selected !== 'string' || selected.trim() === '' || !resolved.has(selected)) {
-    throw new Error('System1 Thinking: profile must select a built-in or configured profile name.');
-  }
-  return resolved.get(selected)!;
+function resolveProfile(selected: unknown): DecisionProfile {
+  if (selected === undefined || selected === 'jev') return JEV_PROFILE;
+  if (selected === 'decision_api') return DECISION_API_PROFILE;
+  throw new Error('System1 Thinking: profile must be jev or decision_api.');
 }
 
 function resolveRubric(value: unknown): string {
@@ -210,7 +171,7 @@ async function requestDecision(
 }
 
 export const register: Register = (on, options) => {
-  const profile = resolveProfile(options.profiles ?? '{}', options.profile ?? 'jev');
+  const profile = resolveProfile(options.profile);
   const rubricInstructions = resolveRubric(options.rubric_instructions);
   const isEnabledAtStart = options.enabled !== false;
   const minIndex = EFFORT_LEVELS.indexOf(options.minEffort as Effort);
@@ -348,7 +309,7 @@ export const register: Register = (on, options) => {
         if (loop.task !== '' && generation === loop.generation && !next.signal.aborted) {
           // Host permissions require literal environment names.
           const apiKey = profile.apiKeyEnv === 'JEV_API_KEY' ? await $.env.get('JEV_API_KEY')
-            : profile.apiKeyEnv === 'DECISION_API_KEY' ? await $.env.get('DECISION_API_KEY') : await $.env.get('SYSTEM1_API_KEY');
+            : await $.env.get('DECISION_API_KEY');
           let result: DecisionResult = { failure: `${profile.apiKeyEnv} is missing or empty`, isPermanent: true };
           if (apiKey !== undefined && apiKey.trim() !== '') {
             loop.decisionCount++;

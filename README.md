@@ -18,19 +18,15 @@ System1 Thinking chooses Claude Code reasoning effort before selected model requ
 - Built-in profiles select fixed decision services.
   - `jev`: TypeSafe System One, `jev-latest`, `JEV_API_KEY`; selected by default.
   - `decision_api`: OpenAI Decision API, `gpt-6-luna`, `DECISION_API_KEY`.
+  - Select one with `profile`; unknown names are rejected.
+  - Models, endpoints, and credential names are hard-coded in `hooks/register.ts`.
   - Failures never switch providers.
-- `profiles` defines named replacements through a JSON string.
-  - Required fields: `protocol`, `model`, `api_key_env`.
-  - `protocol` accepts `openai` or `typesafe` decision wire formats, not ordinary chat-completions compatibility.
-  - Keys must use `SYSTEM1_API_KEY`, `JEV_API_KEY`, or `DECISION_API_KEY` because Claude requires literal names.
-  - Optional `endpoint` is the complete HTTPS URL; omission uses the protocol's canonical endpoint.
-  - URL credentials, fragments, unknown fields, and unknown profile names are rejected.
 - Optional `rubric_instructions` replaces the default rubric.
   - Overrides must be nonblank and at most 4,096 UTF-8 bytes.
   - Keep evidence untrusted and require a supplied choice.
 - Configure through user settings or `--settings`, not project settings.
-  - Save this example as `system1-options.json`; replace its endpoint and model.
-  - Export `SYSTEM1_API_KEY` separately; never store keys in configuration or URLs.
+  - Save this example as `system1-options.json` to select OpenAI Decision API.
+  - Export `DECISION_API_KEY` separately; never store keys in configuration or URLs.
 
   ```json
   {
@@ -38,8 +34,7 @@ System1 Thinking chooses Claude Code reasoning effort before selected model requ
       "system1": {
         "options": {
           "enabled": false,
-          "profile": "third_party",
-          "profiles": "{\"third_party\":{\"protocol\":\"openai\",\"model\":\"provider-model\",\"api_key_env\":\"SYSTEM1_API_KEY\",\"endpoint\":\"https://example.com/v1/decisions\"}}"
+          "profile": "decision_api"
         }
       }
     }
@@ -69,9 +64,9 @@ System1 Thinking chooses Claude Code reasoning effort before selected model requ
   - Timeouts cannot cancel dispatched requests; retries may overlap and incur charges.
   - No spending cap exists.
   - Redirects may forward evidence even when authorization headers are stripped.
-- Validated on Claude Code 2.1.296: strict compilation, plugin validation, and 25 offline checks.
+- Validated on Claude Code 2.1.296: strict compilation, plugin validation, and offline checks.
   - Headless runs confirmed effort propagation and cache preservation; recheck after upgrades.
-  - Desktop, interactive use, subagents, third-party providers, and real-work decision quality remain unverified.
+  - Desktop, interactive use, subagents, and real-work decision quality remain unverified.
 - Diagnostic scripts send real requests and may expose sensitive text in output.
   - `scripts/drive_turns.py` separates prompts into turns.
   - `scripts/wire_proxy.py` logs metadata and complete system messages while forwarding requests to Anthropic.

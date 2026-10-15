@@ -1,7 +1,7 @@
 {
   "name": "system1",
   "version": "0.1.0",
-  "description": "System1 Thinking: Claude Code reasoning effort chosen by configurable decision services.",
+  "description": "System1 Thinking: Claude Code reasoning effort chosen by TypeSafe Jev or the OpenAI Decision API.",
   "author": {
     "name": "tngo-workflow"
   },
@@ -10,13 +10,7 @@
       "type": "string",
       "title": "Decision profile",
       "default": "jev",
-      "description": "Select jev, decision_api, or a name defined in profiles. Unknown names are rejected; no provider fallback."
-    },
-    "profiles": {
-      "type": "string",
-      "title": "Decision profiles (JSON)",
-      "default": "{}",
-      "description": "JSON object of named profiles: protocol (typesafe/openai), model, api_key_env (SYSTEM1_API_KEY/JEV_API_KEY/DECISION_API_KEY), optional HTTPS endpoint. Entries replace built-ins. Never include key values."
+      "description": "Select jev or decision_api. Provider details are hard-coded in the mod."
     },
     "rubric_instructions": {
       "type": "string",
