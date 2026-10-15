@@ -181,6 +181,7 @@ export const register: Register = (on, options) => {
   const evidenceBytes = Number(options.evidenceBytes ?? 8192);
   const decisionSettings: DecisionSettings = { profile, choices: boundedChoices, timeoutMs, rubricInstructions };
   const adaptsSubagents = options.subagents === true;
+  let mainSpinnerId: string;
   const loops = new Map<string, LoopState>();
   const turnTexts = new Map<string, string>();
 
@@ -223,7 +224,14 @@ export const register: Register = (on, options) => {
       + `choices ${boundedChoices.join('/')}; controller ${profile.name} (${profile.model}); decisions ${loop.decisionCount}; last: ${loop.outcome}.`;
   }
 
+  on('ui.render', { component: 'Spinner' }, ($, event, next) => {
+    const loop = loops.get(event.requestId === mainSpinnerId ? MAIN_LOOP : event.requestId);
+    if (!loop?.isEnabled || loop.effort === undefined) return next(event);
+    return next({ ...event, props: { ...event.props, suffix: `${event.props.suffix} sys1·${loop.effort}` } });
+  });
+
   on('session.start', async ($, event, next) => {
+    mainSpinnerId = await $.session.id();
     await $.command.register({
       name: 'system1', description: 'Toggle System1 Thinking; paid decision-provider requests when on.',
       argumentHint: '[on|off|status]', immediate: true,
@@ -263,11 +271,11 @@ export const register: Register = (on, options) => {
     }
     if (action === 'on') {
       setEnabled(loop, true, 'enabled');
-      $.ui.status(undefined);
+      $.ui.invalidate('ui.render');
     } else if (action === 'off') {
       // Off also reaches independently controlled subagents.
       setAllEnabled(false, 'disabled; native effort restored');
-      $.ui.status(undefined);
+      $.ui.invalidate('ui.render');
     } else if (action !== 'status') {
       return { text: 'Usage: /system1 [on|off|status]; no argument toggles.' };
     }
@@ -295,7 +303,7 @@ export const register: Register = (on, options) => {
     loops.clear();
     turnTexts.clear();
     if (keptEnabled !== undefined) loops.set(MAIN_LOOP, createLoop(keptEnabled));
-    $.ui.status(undefined);
+    $.ui.invalidate('ui.render');
     return next(event);
   });
 
@@ -309,13 +317,13 @@ export const register: Register = (on, options) => {
       loop.isTurnSelected = (loop.turnCount - 1) % turnInterval === 0;
       loop.task = truncateUtf8(turnTexts.get(event.turnId) ?? '', evidenceBytes / 3);
       turnTexts.delete(event.turnId);
-      if (loop.effort !== undefined && loopId === MAIN_LOOP) $.ui.status(undefined);
       loop.effort = undefined;
+      $.ui.invalidate('ui.render');
     }
 
     if (loop.isEnabled && loop.nativeModel !== undefined && (event.model !== loop.nativeModel || event.effort !== loop.nativeEffort)) {
       setEnabled(loop, false, `paused: native setting changed to ${event.model}/${event.effort ?? 'none'}`);
-      if (loopId === MAIN_LOOP) $.ui.status(undefined);
+      $.ui.invalidate('ui.render');
     }
     Object.assign(loop, { nativeModel: event.model, nativeEffort: event.effort });
 
@@ -340,12 +348,11 @@ export const register: Register = (on, options) => {
           if (generation === loop.generation && !next.signal.aborted && !('isCancelled' in result)) {
             if ('choice' in result) {
               Object.assign(loop, { effort: result.choice, acceptedStep: event.index, isDecisionDue: false, failureCount: 0, retryAt: 0 });
+              $.ui.invalidate('ui.render');
               loop.outcome = `accepted ${result.choice} at turn ${loop.turnCount}, step ${event.index} in ${completedAt - now} ms`;
-              if (loopId === MAIN_LOOP) $.ui.status(`System1 Thinking · ${result.choice}`);
             } else if (result.isPermanent) {
               loop.blockReason = `${profile.name}: ${result.failure}`;
               loop.outcome = `${loop.blockReason}; run /system1 on after fixing it`;
-              if (loopId === MAIN_LOOP) $.ui.status(`System1 Thinking blocked: ${loop.blockReason}`);
             } else {
               recordFailure(loop, completedAt, `${profile.name}: ${result.failure}`);
             }

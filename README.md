@@ -17,6 +17,8 @@ System1 Thinking chooses Claude Code reasoning effort before selected model requ
   - `off` disables existing subagents too.
   - Native model or effort changes pause adaptation.
   - Accepted effort lasts only within its turn.
+  - The spinner appends `sys1·low`, `sys1·medium`, `sys1·high`, or `sys1·xhigh`.
+  - Claude’s native effort label remains unchanged; `/system1 status` reports controller failures.
   - `/clear` preserves your enabled choice.
 - Built-in profiles select fixed decision services.
   - `jev`: TypeSafe System One, `jev-latest`, `JEV_API_KEY`; selected by default.
