@@ -69,7 +69,8 @@ function isAdaptableEffort(effort: NativeEffort): effort is Effort {
 
 // ---- Decision services: ASM's TypeSafe and OpenAI Decision API wire formats ----
 
-type DecisionProfile = { name: string; protocol: 'typesafe' | 'openai'; url: string; model: string; apiKeyEnv: string };
+type ApiKeyEnv = 'JEV_API_KEY' | 'DECISION_API_KEY' | 'SYSTEM1_API_KEY';
+type DecisionProfile = { name: string; protocol: 'typesafe' | 'openai'; url: string; model: string; apiKeyEnv: ApiKeyEnv };
 type DecisionResult = { choice: Effort } | { failure: string; isPermanent: boolean } | { isCancelled: true };
 
 const JEV_PROFILE: DecisionProfile = {
@@ -80,6 +81,59 @@ const DECISION_API_PROFILE: DecisionProfile = {
 };
 const MAX_INPUT_ITEM_BYTES = 8192;
 const MAX_RESPONSE_BYTES = 16 * 1024;
+
+function resolveProfile(rawProfiles: unknown, selected: unknown): DecisionProfile {
+  if (typeof rawProfiles !== 'string') throw new Error('System1 Thinking: profiles must be a JSON object string.');
+  let profiles: unknown;
+  try {
+    profiles = JSON.parse(rawProfiles);
+  } catch {
+    throw new Error('System1 Thinking: profiles must be valid JSON.');
+  }
+  if (profiles === null || typeof profiles !== 'object' || Array.isArray(profiles)) {
+    throw new Error('System1 Thinking: profiles must contain a JSON object.');
+  }
+  const resolved = new Map<string, DecisionProfile>([['jev', JEV_PROFILE], ['decision_api', DECISION_API_PROFILE]]);
+  for (const [name, value] of Object.entries(profiles)) {
+    if (name.trim() === '' || value === null || typeof value !== 'object' || Array.isArray(value)) {
+      throw new Error('System1 Thinking: each profile needs a nonblank name and an object definition.');
+    }
+    const entry = value as Record<string, unknown>;
+    if (Object.keys(entry).some(key => !['protocol', 'model', 'api_key_env', 'endpoint'].includes(key))) {
+      throw new Error('System1 Thinking: unsupported profile field; credentials belong in environment variables.');
+    }
+    const { protocol, model, api_key_env: apiKeyEnv, endpoint } = entry;
+    if ((protocol !== 'typesafe' && protocol !== 'openai') || typeof model !== 'string' || model.trim() === ''
+      || (apiKeyEnv !== 'JEV_API_KEY' && apiKeyEnv !== 'DECISION_API_KEY' && apiKeyEnv !== 'SYSTEM1_API_KEY')) {
+      throw new Error('System1 Thinking: profiles require protocol (typesafe/openai), a nonblank model, and api_key_env (JEV_API_KEY/DECISION_API_KEY/SYSTEM1_API_KEY).');
+    }
+    if (endpoint !== undefined && (typeof endpoint !== 'string' || !/^https:\/\//i.test(endpoint))) {
+      throw new Error('System1 Thinking: profile endpoint must be a full HTTPS URL.');
+    }
+    let url: URL;
+    try {
+      url = new URL((endpoint as string | undefined) ?? (protocol === 'typesafe' ? JEV_PROFILE.url : DECISION_API_PROFILE.url));
+    } catch {
+      throw new Error('System1 Thinking: profile endpoint must be a full HTTPS URL.');
+    }
+    if (url.protocol !== 'https:' || url.username !== '' || url.password !== '' || url.hash !== '' || url.href.includes('#')) {
+      throw new Error('System1 Thinking: profile endpoint must use HTTPS without URL credentials or a fragment.');
+    }
+    resolved.set(name, { name, protocol, model, apiKeyEnv, url: url.href });
+  }
+  if (typeof selected !== 'string' || selected.trim() === '' || !resolved.has(selected)) {
+    throw new Error('System1 Thinking: profile must select a built-in or configured profile name.');
+  }
+  return resolved.get(selected)!;
+}
+
+function resolveRubric(value: unknown): string {
+  if (value === undefined) return RUBRIC;
+  if (typeof value !== 'string' || value.trim() === '' || encoder.encode(value).length > 4096) {
+    throw new Error('System1 Thinking: rubric_instructions must be nonblank text of at most 4096 UTF-8 bytes.');
+  }
+  return value;
+}
 
 // ASM caps each input item at 8 KiB, preferring to end a cut item at a line break.
 function splitInputItems(input: string): string[] {
@@ -93,18 +147,18 @@ function splitInputItems(input: string): string[] {
   return items;
 }
 
-function buildDecisionBody(profile: DecisionProfile, input: string, choices: readonly Effort[]): string {
+function buildDecisionBody(profile: DecisionProfile, input: string, choices: readonly Effort[], rubricInstructions: string): string {
   const items = splitInputItems(input);
   return JSON.stringify(profile.protocol === 'openai'
     ? {
       model: profile.model,
       input: items.map(text => ({ role: 'user', content: [{ type: 'input_text', text }] })),
-      questions: [{ type: 'choice', name: 'reasoning_effort', instructions: RUBRIC, choices: choices.map(value => ({ value })) }],
+      questions: [{ type: 'choice', name: 'reasoning_effort', instructions: rubricInstructions, choices: choices.map(value => ({ value })) }],
     }
     : {
       model: profile.model,
       state: items.length === 1 ? input : items,
-      questions: { reasoning_effort: { type: 'choice', instructions: RUBRIC, criteria: Object.fromEntries(choices.map(choice => [choice, null])) } },
+      questions: { reasoning_effort: { type: 'choice', instructions: rubricInstructions, criteria: Object.fromEntries(choices.map(choice => [choice, null])) } },
     });
 }
 
@@ -137,7 +191,7 @@ function classifyDecisionResponse(profile: DecisionProfile, status: number, text
   return choice === undefined ? { failure: 'invalid answer', isPermanent: false } : { choice };
 }
 
-type DecisionSettings = { profile: DecisionProfile; choices: readonly Effort[]; timeoutMs: number };
+type DecisionSettings = { profile: DecisionProfile; choices: readonly Effort[]; timeoutMs: number; rubricInstructions: string };
 
 // Bounds the wait locally: the host fetch takes no abort signal, so a late answer is discarded, not cancelled.
 async function requestDecision(
@@ -146,7 +200,7 @@ async function requestDecision(
   const { profile, choices, timeoutMs } = settings;
   const request = $.http.fetch(profile.url, {
     method: 'POST', headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
-    body: buildDecisionBody(profile, input, choices),
+    body: buildDecisionBody(profile, input, choices, settings.rubricInstructions),
   });
   const deadline = new AbortController();
   const outcome = await Promise.race([
@@ -161,7 +215,8 @@ async function requestDecision(
 }
 
 export const register: Register = (on, options) => {
-  const profile = options.profile === 'decision_api' ? DECISION_API_PROFILE : JEV_PROFILE;
+  const profile = resolveProfile(options.profiles ?? '{}', options.profile ?? 'jev');
+  const rubricInstructions = resolveRubric(options.rubric_instructions);
   const isEnabledAtStart = options.enabled !== false;
   const minIndex = EFFORT_LEVELS.indexOf(options.minEffort as Effort);
   const maxIndex = EFFORT_LEVELS.indexOf(options.maxEffort as Effort);
@@ -170,7 +225,7 @@ export const register: Register = (on, options) => {
   const stepInterval = Number(options.stepInterval ?? 2);
   const timeoutMs = Number(options.timeoutMs ?? 2000);
   const evidenceBytes = Number(options.evidenceBytes ?? 8192);
-  const decisionSettings: DecisionSettings = { profile, choices: boundedChoices, timeoutMs };
+  const decisionSettings: DecisionSettings = { profile, choices: boundedChoices, timeoutMs, rubricInstructions };
   const adaptsSubagents = options.subagents === true;
   const loops = new Map<string, LoopState>();
   const turnTexts = new Map<string, string>();
@@ -217,7 +272,7 @@ export const register: Register = (on, options) => {
 
   on('session.start', async ($, event, next) => {
     await $.command.register({
-      name: 'system1', description: 'Toggle System1 Thinking; paid Jev or Decision API requests when on.',
+      name: 'system1', description: 'Toggle System1 Thinking; paid decision-provider requests when on.',
       argumentHint: '[on|off|status]', immediate: true,
     });
     return next(event);
@@ -304,7 +359,8 @@ export const register: Register = (on, options) => {
         if (loop.task !== '' && generation === loop.generation && !next.signal.aborted) {
           // Missing credentials block until off→on, as in ASM; there is no fallback provider.
           // The host lists the variables a mod reads, so each name is a literal.
-          const apiKey = profile === JEV_PROFILE ? await $.env.get('JEV_API_KEY') : await $.env.get('DECISION_API_KEY');
+          const apiKey = profile.apiKeyEnv === 'JEV_API_KEY' ? await $.env.get('JEV_API_KEY')
+            : profile.apiKeyEnv === 'DECISION_API_KEY' ? await $.env.get('DECISION_API_KEY') : await $.env.get('SYSTEM1_API_KEY');
           let result: DecisionResult = { failure: `${profile.apiKeyEnv} is missing or empty`, isPermanent: true };
           if (apiKey !== undefined && apiKey.trim() !== '') {
             loop.decisionCount++;

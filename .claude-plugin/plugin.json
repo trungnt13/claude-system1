@@ -1,7 +1,7 @@
 {
   "name": "system1",
   "version": "0.1.0",
-  "description": "System1 Thinking: reasoning effort chosen per model step by TypeSafe Jev or the OpenAI Decision API.",
+  "description": "System1 Thinking: Claude Code reasoning effort chosen by configurable decision services.",
   "author": {
     "name": "tngo-workflow"
   },
@@ -10,11 +10,18 @@
       "type": "string",
       "title": "Decision profile",
       "default": "jev",
-      "options": [
-        "jev",
-        "decision_api"
-      ],
-      "description": "jev: TypeSafe jev-latest with JEV_API_KEY; decision_api: OpenAI gpt-6-luna with DECISION_API_KEY."
+      "description": "Select jev, decision_api, or a name defined in profiles. Unknown names are rejected; no provider fallback."
+    },
+    "profiles": {
+      "type": "string",
+      "title": "Decision profiles (JSON)",
+      "default": "{}",
+      "description": "JSON object of named profiles: protocol (typesafe/openai), model, api_key_env (SYSTEM1_API_KEY/JEV_API_KEY/DECISION_API_KEY), optional HTTPS endpoint. Entries replace built-ins. Never include key values."
+    },
+    "rubric_instructions": {
+      "type": "string",
+      "title": "Decision rubric",
+      "description": "Omit to use the default rubric. A supplied rubric must not be blank and must be at most 4096 UTF-8 bytes."
     },
     "enabled": {
       "type": "boolean",
