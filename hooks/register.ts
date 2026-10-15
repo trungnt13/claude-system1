@@ -3,11 +3,10 @@ import type { EngineInterface, Register, SessionMessage } from 'claude-code';
 type Effort = 'low' | 'medium' | 'high' | 'xhigh';
 type NativeEffort = Effort | 'max' | number | undefined;
 
-// Ordered levels; `max` is excluded by policy.
+// Exclude max by policy.
 const EFFORT_LEVELS: readonly Effort[] = ['low', 'medium', 'high', 'xhigh'];
 const MAIN_LOOP = 'main';
 const RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 16000, 30000];
-// Default rubric sent as the decision question's instructions.
 const RUBRIC = `Choose the lowest supported reasoning effort sufficient for the next model step. \
 Consider interdependent constraints, unresolved uncertainty, and the consequences of mistakes. \
 Raise effort for difficult reasoning; lower it for routine execution or reporting after decisions are settled. \
@@ -35,7 +34,6 @@ type LoopState = {
   outcome: string;
 };
 
-// Keep recent evidence within the UTF-8 byte budget.
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -43,7 +41,7 @@ const decoder = new TextDecoder();
 function truncateUtf8(text: string, maxBytes: number): string {
   const bytes = encoder.encode(text);
   let end = Math.min(bytes.length, Math.max(0, Math.floor(maxBytes)));
-  // Back up to a character boundary so truncation never splits a UTF-8 sequence.
+  // Avoid splitting UTF-8 code points.
   while (end > 0 && end < bytes.length && (bytes[end]! & 0xc0) === 0x80) end--;
   return decoder.decode(bytes.subarray(0, end));
 }
@@ -67,7 +65,6 @@ function isAdaptableEffort(effort: NativeEffort): effort is Effort {
   return typeof effort === 'string' && effort !== 'max';
 }
 
-// Support TypeSafe and OpenAI Decision API wire formats.
 
 type ApiKeyEnv = 'JEV_API_KEY' | 'DECISION_API_KEY' | 'SYSTEM1_API_KEY';
 type DecisionProfile = { name: string; protocol: 'typesafe' | 'openai'; url: string; model: string; apiKeyEnv: ApiKeyEnv };
@@ -135,8 +132,7 @@ function resolveRubric(value: unknown): string {
   return value;
 }
 
-// Cap input items at 8 KiB.
-// Prefer line boundaries when splitting.
+// Prefer line boundaries within 8 KiB.
 function splitInputItems(input: string): string[] {
   const items: string[] = [];
   for (let rest = input; rest !== '';) {
@@ -163,7 +159,6 @@ function buildDecisionBody(profile: DecisionProfile, input: string, choices: rea
     });
 }
 
-/** Reject ambiguous answers and choices outside the supplied set. */
 function parseDecisionAnswer(profile: DecisionProfile, text: string, choices: readonly Effort[]): Effort | undefined {
   let body: unknown;
   try {
@@ -184,7 +179,6 @@ function parseDecisionAnswer(profile: DecisionProfile, text: string, choices: re
   return type === 'choice' ? choices.find(allowed => allowed === choice) : undefined;
 }
 
-/** Block on permanent client errors and allow retries after transient failures. */
 function classifyDecisionResponse(profile: DecisionProfile, status: number, text: string, choices: readonly Effort[]): DecisionResult {
   if (status < 200 || status >= 300) return { failure: `HTTP ${status}`, isPermanent: status >= 400 && status < 500 && status !== 408 && status !== 429 };
   if (encoder.encode(text).length > MAX_RESPONSE_BYTES) return { failure: 'response exceeds 16 KiB', isPermanent: false };
@@ -194,8 +188,7 @@ function classifyDecisionResponse(profile: DecisionProfile, status: number, text
 
 type DecisionSettings = { profile: DecisionProfile; choices: readonly Effort[]; timeoutMs: number; rubricInstructions: string };
 
-// Bound the local wait because host fetch cannot accept an abort signal.
-// Discard late answers without cancelling their requests.
+// Host fetch cannot cancel dispatched requests.
 async function requestDecision(
   $: EngineInterface, settings: DecisionSettings, apiKey: string, input: string, signal: AbortSignal,
 ): Promise<DecisionResult> {
@@ -245,8 +238,7 @@ export const register: Register = (on, options) => {
     return loop;
   }
 
-  // Toggling resets recovery and makes the next eligible step due.
-  // Clear the baseline so changes made while disabled cannot trigger manual pauses.
+  // Ignore native changes made while disabled.
   function setEnabled(loop: LoopState, isEnabled: boolean, outcome: string): void {
     Object.assign(loop, {
       isEnabled, generation: loop.generation + 1, effort: undefined, acceptedStep: undefined, isDecisionDue: isEnabled,
@@ -290,7 +282,7 @@ export const register: Register = (on, options) => {
       setEnabled(loop, true, 'enabled');
       $.ui.status(undefined);
     } else if (action === 'off') {
-      // Subagent loops have no toggle of their own, so off reaches every loop.
+      // Off also reaches independently controlled subagents.
       setAllEnabled(false, 'disabled; native effort restored');
       $.ui.status(undefined);
     } else if (action !== 'status') {
@@ -304,8 +296,6 @@ export const register: Register = (on, options) => {
     return next(event);
   });
 
-  // Capture steering prompts folded into the running main turn.
-  // Waiting prompts start another turn.
   on('prompt.submit', async ($, event, next) => {
     const entered = await next(event);
     const loop = loops.get(MAIN_LOOP);
@@ -316,8 +306,7 @@ export const register: Register = (on, options) => {
     return entered;
   });
 
-  // Preserve the enabled choice across /clear.
-  // Other session endings restore the startup default.
+  // Preserve enabled choice only across /clear.
   on('session.end', async ($, event, next) => {
     const keptEnabled = event.reason === 'clear' ? mainLoop().isEnabled : undefined;
     loops.clear();
@@ -332,8 +321,6 @@ export const register: Register = (on, options) => {
     if (event.agentId !== undefined && !loops.has(loopId)) loops.set(loopId, createLoop(adaptsSubagents && mainLoop().isEnabled));
     const loop = loopId === MAIN_LOOP ? mainLoop() : loops.get(loopId)!;
 
-    // Reset turn-local evidence and cadence.
-    // Each turn starts at native effort.
     if (loop.turnId !== event.turnId) {
       Object.assign(loop, { turnId: event.turnId, turnCount: loop.turnCount + 1, acceptedStep: undefined, steer: '' });
       loop.isTurnSelected = (loop.turnCount - 1) % turnInterval === 0;
@@ -343,14 +330,12 @@ export const register: Register = (on, options) => {
       loop.effort = undefined;
     }
 
-    // Respect manual model and effort changes by pausing adaptation.
     if (loop.isEnabled && loop.nativeModel !== undefined && (event.model !== loop.nativeModel || event.effort !== loop.nativeEffort)) {
       setEnabled(loop, false, `paused: native setting changed to ${event.model}/${event.effort ?? 'none'}`);
       if (loopId === MAIN_LOOP) $.ui.status(undefined);
     }
     Object.assign(loop, { nativeModel: event.model, nativeEffort: event.effort });
 
-    // Preserve requests without an adjustable named effort level.
     const isDue = loop.isDecisionDue
       || (loop.isTurnSelected && (loop.acceptedStep === undefined || event.index - loop.acceptedStep >= stepInterval));
     if (!loop.isEnabled || !isAdaptableEffort(event.effort)) return yield* next(event);
@@ -359,12 +344,9 @@ export const register: Register = (on, options) => {
       const generation = loop.generation;
       const rows = event.agentId === undefined ? await $.session.messages() : await $.session.messages({ agentId: event.agentId });
       if (Array.isArray(rows)) {
-        // Recover missing turn text from the newest user message.
         if (loop.task === '') loop.task = truncateUtf8(rows.findLast(row => row.role === 'user' && row.text !== '')?.text ?? '', evidenceBytes / 3);
         if (loop.task !== '' && generation === loop.generation && !next.signal.aborted) {
-          // Missing credentials block decisions until re-enabled.
-          // Never switch providers after failure.
-          // The host lists the variables a mod reads, so each name is a literal.
+          // Host permissions require literal environment names.
           const apiKey = profile.apiKeyEnv === 'JEV_API_KEY' ? await $.env.get('JEV_API_KEY')
             : profile.apiKeyEnv === 'DECISION_API_KEY' ? await $.env.get('DECISION_API_KEY') : await $.env.get('SYSTEM1_API_KEY');
           let result: DecisionResult = { failure: `${profile.apiKeyEnv} is missing or empty`, isPermanent: true };
@@ -373,8 +355,7 @@ export const register: Register = (on, options) => {
             result = await requestDecision($, decisionSettings, apiKey, collectEvidence(loop, rows, evidenceBytes), next.signal);
           }
           const completedAt = await $.clock.now();
-          // Ignore stale results after toggles, manual changes, or interruptions.
-          // Discarded results do not count as failures.
+          // Discard stale results without counting failures.
           if (generation === loop.generation && !next.signal.aborted && !('isCancelled' in result)) {
             if ('choice' in result) {
               Object.assign(loop, { effort: result.choice, acceptedStep: event.index, isDecisionDue: false, failureCount: 0, retryAt: 0 });

@@ -88,7 +88,7 @@
     "subagents": {
       "type": "boolean",
       "title": "System1 Thinking for subagents",
-      "default": false,
+      "default": true,
       "description": "Subagents inherit the main loop's on/off state once, at their first step."
     }
   }

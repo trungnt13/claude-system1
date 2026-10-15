@@ -1,4 +1,4 @@
-"""Keep headless prompts in separate turns by waiting for each result."""
+"""Separate headless prompt turns."""
 import json
 import subprocess
 import sys

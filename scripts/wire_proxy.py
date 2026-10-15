@@ -1,7 +1,6 @@
-"""Inspect effort changes while forwarding requests to Anthropic.
+"""Inspect effort changes.
 
-- Logs include complete system-role messages.
-- Keep logs private because system content may contain secrets.
+Logs can contain secrets.
 """
 import http.client
 import http.server
