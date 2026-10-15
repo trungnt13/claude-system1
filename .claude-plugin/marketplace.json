@@ -1,0 +1,15 @@
+{
+  "name": "tngo-system1",
+  "owner": {
+    "name": "trungnt13"
+  },
+  "plugins": [
+    {
+      "name": "system1",
+      "source": "./"
+    }
+  ],
+  "metadata": {
+    "description": "System1 Thinking for Claude Code."
+  }
+}

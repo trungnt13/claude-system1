@@ -2,12 +2,21 @@
 
 System1 Thinking chooses Claude Code reasoning effort before selected model requests.
 
-- Export `JEV_API_KEY`, then load the plugin from its repository directory.
+- Export `JEV_API_KEY`, then choose marketplace installation or local loading.
   - Enabled by default; provider requests may incur charges.
   - Desktop launches do not read `~/.bashrc`.
   - Enabled startup schedules one background warmup request, without conversation content.
   - Warmup may incur charges; failures never alter decisions or delay startup.
   - An immediate first turn does not wait for warmup completion.
+
+  **Marketplace installation**
+
+  ```bash
+  claude plugin marketplace add trungnt13/claude-system1
+  claude plugin install system1@tngo-system1 --scope user
+  ```
+
+  **Local loading**, from the repository directory; no installation required:
 
   ```bash
   claude --plugin-dir .
