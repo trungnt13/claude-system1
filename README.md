@@ -1,6 +1,6 @@
-# Adaptive effort
+# System1 Thinking
 
-A Claude Code mod that ports ASM adaptive reasoning. Before selected model steps, a decision service picks the main request's reasoning effort. The decision service is TypeSafe Jev or the OpenAI Decision API, using ASM's wire formats. No language model is used as the classifier, and there is no fallback provider.
+System1 Thinking is a Claude Code mod that ports ASM adaptive reasoning. Before selected model steps, a decision service picks the main request's reasoning effort. The decision service is TypeSafe Jev or the OpenAI Decision API, using ASM's wire formats. No language model is used as the classifier, and there is no fallback provider.
 
 ## Start
 
@@ -8,7 +8,7 @@ A Claude Code mod that ports ASM adaptive reasoning. Before selected model steps
 claude --plugin-dir ~/codes/claude-system1
 ```
 
-Export the selected profile's key in the environment that starts Claude. A Claude launched from the desktop app does not read `~/.bashrc`. There, a missing key blocks adaptation, and the status line shows `auto effort blocked: … JEV_API_KEY is missing or empty`. Adaptation is on at start, matching ASM's `enabled = true`; turn this off with the `enabled` option. `/system1` toggles adaptation; `/system1 on|off|status` sets or reports it. After each accepted decision the status line shows `effort <level> · auto`. `/clear` keeps the on/off choice.
+Export the selected profile's key in the environment that starts Claude. A Claude launched from the desktop app does not read `~/.bashrc`. There, a missing key blocks adaptation, and the status line shows `System1 Thinking blocked: … JEV_API_KEY is missing or empty`. System1 Thinking is on at start, matching ASM's `enabled = true`; turn this off with the `enabled` option. `/system1` toggles System1 Thinking; `/system1 on|off|status` sets or reports it. After each accepted decision the status line shows `System1 Thinking · <level>`. `/clear` keeps the on/off choice.
 
 | Profile | Endpoint | Model | Key variable | Wire format |
 |---|---|---|---|---|
@@ -46,7 +46,7 @@ In a proxied run (Opus 5.5, medium → high at step 2), the switching request re
 | Option | Default | Meaning |
 |---|---:|---|
 | `profile` | `jev` | Decision service profile (table above) |
-| `enabled` | `true` | Start each session with adaptation on |
+| `enabled` | `true` | Start each session with System1 Thinking on |
 | `minEffort` / `maxEffort` | `low` / `xhigh` | Choice bounds |
 | `turnInterval` | `1` | Decide on loop turns 1, 1+N, 1+2N |
 | `stepInterval` | `2` | Steps between accepted decisions in a selected turn |

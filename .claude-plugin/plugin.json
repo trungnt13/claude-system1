@@ -1,7 +1,7 @@
 {
   "name": "system1",
   "version": "0.1.0",
-  "description": "ASM adaptive reasoning effort chosen per model step by TypeSafe Jev or the OpenAI Decision API.",
+  "description": "System1 Thinking: reasoning effort chosen per model step by TypeSafe Jev or the OpenAI Decision API.",
   "author": {
     "name": "tngo-workflow"
   },
@@ -20,7 +20,7 @@
       "type": "boolean",
       "title": "Enabled at start",
       "default": true,
-      "description": "Start each session with adaptation on; every decision is a paid request to the profile's service."
+      "description": "Start each session with System1 Thinking on; every decision is a paid request to the profile's service."
     },
     "minEffort": {
       "type": "string",
@@ -80,7 +80,7 @@
     },
     "subagents": {
       "type": "boolean",
-      "title": "Adapt subagents",
+      "title": "System1 Thinking for subagents",
       "default": false,
       "description": "Subagents inherit the main loop's on/off state once, at their first step."
     }

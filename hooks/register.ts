@@ -210,14 +210,14 @@ export const register: Register = (on, options) => {
   function describeLoop(loop: LoopState): string {
     const state = loop.blockReason === undefined ? (loop.isEnabled ? 'on' : 'off') : `blocked: ${loop.blockReason}`;
     const isInactive = loop.isEnabled && loop.nativeModel !== undefined && !isAdaptableEffort(loop.nativeEffort);
-    return `Adaptive effort ${state}${isInactive ? ' (inactive: native effort is not an adjustable level)' : ''}; `
+    return `System1 Thinking ${state}${isInactive ? ' (inactive: native effort is not an adjustable level)' : ''}; `
       + `effort ${loop.effort ?? `native (${loop.nativeEffort ?? 'unknown'})`}; `
       + `choices ${boundedChoices.join('/')}; controller ${profile.name} (${profile.model}); decisions ${loop.decisionCount}; last: ${loop.outcome}.`;
   }
 
   on('session.start', async ($, event, next) => {
     await $.command.register({
-      name: 'system1', description: 'Toggle ASM adaptive effort; paid Jev or Decision API requests when on.',
+      name: 'system1', description: 'Toggle System1 Thinking; paid Jev or Decision API requests when on.',
       argumentHint: '[on|off|status]', immediate: true,
     });
     return next(event);
@@ -227,7 +227,7 @@ export const register: Register = (on, options) => {
     const loop = mainLoop();
     const action = event.args.trim() || (loop.isEnabled || loop.blockReason !== undefined ? 'off' : 'on');
     if (action === 'on' && boundedChoices.length < 2) {
-      return { text: `Adaptive effort needs at least two choices; minEffort..maxEffort gives ${boundedChoices.join('/') || 'none'}.` };
+      return { text: `System1 Thinking needs at least two choices; minEffort..maxEffort gives ${boundedChoices.join('/') || 'none'}.` };
     }
     if (action === 'on') {
       setEnabled(loop, true, 'enabled');
@@ -316,11 +316,11 @@ export const register: Register = (on, options) => {
             if ('choice' in result) {
               Object.assign(loop, { effort: result.choice, acceptedStep: event.index, isDecisionDue: false, failureCount: 0, retryAt: 0 });
               loop.outcome = `accepted ${result.choice} at turn ${loop.turnCount}, step ${event.index} in ${completedAt - now} ms`;
-              if (loopId === MAIN_LOOP) $.ui.status(`effort ${result.choice} · auto`);
+              if (loopId === MAIN_LOOP) $.ui.status(`System1 Thinking · ${result.choice}`);
             } else if (result.isPermanent) {
               loop.blockReason = `${profile.name}: ${result.failure}`;
               loop.outcome = `${loop.blockReason}; run /system1 on after fixing it`;
-              if (loopId === MAIN_LOOP) $.ui.status(`auto effort blocked: ${loop.blockReason}`);
+              if (loopId === MAIN_LOOP) $.ui.status(`System1 Thinking blocked: ${loop.blockReason}`);
             } else {
               recordFailure(loop, completedAt, `${profile.name}: ${result.failure}`);
             }
