@@ -8,7 +8,6 @@ const EFFORT_LEVELS: readonly Effort[] = ['low', 'medium', 'high', 'xhigh'];
 const MAIN_LOOP = 'main';
 const ROLE_EFFORT_LIMITS = new Map<string, readonly [Effort, Effort]>([
   ['reviewer', ['high', 'xhigh']],
-  ['tngo-reviewer', ['high', 'xhigh']],
   ['implementer', ['low', 'high']],
   ['general-purpose', ['low', 'high']],
   ['worker', ['low', 'high']],

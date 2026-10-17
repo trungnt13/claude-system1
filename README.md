@@ -70,7 +70,7 @@ System1 Thinking chooses Claude Code reasoning effort before selected model requ
   - `timeoutMs`: 2,000 milliseconds; allowed range 1–5,000.
   - `evidenceBytes`: 8,192 bytes; allowed range 128–32,768.
   - `subagents`: true; children inherit the main loop's enabled flag once.
-  - Hard-coded reviewer limits: `reviewer`, `tngo-reviewer` use high–xhigh.
+  - Hard-coded reviewer limits: `reviewer` uses high–xhigh.
   - Implementer limits: `implementer`, `general-purpose`, `worker`, `claude`, `statusline-setup`, `tngo-opus`, `tngo-sonnet` use low–high.
   - Role limits intersect global bounds; empty intersections stop matching requests.
   - Role-limited fallbacks stay within bounds; single-choice role ranges skip provider requests.
