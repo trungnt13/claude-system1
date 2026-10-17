@@ -28,6 +28,8 @@ System1 Thinking chooses Claude Code reasoning effort before selected model requ
   - Native model or effort changes pause adaptation.
   - Accepted effort lasts only within its turn.
   - The spinner appends `sys1·low`, `sys1·medium`, `sys1·high`, or `sys1·xhigh`.
+  - Decision failures append `·err`; the next accepted decision clears it.
+  - Without accepted effort, failures show `sys1··err`; cooldowns and new turns preserve errors.
   - Claude’s native effort label remains unchanged; `/system1 status` reports controller failures.
   - `/clear` preserves your enabled choice.
 - Built-in profiles select fixed decision services.

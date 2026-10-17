@@ -243,8 +243,10 @@ export const register: Register = (on, options) => {
 
   on('ui.render', { component: 'Spinner' }, ($, event, next) => {
     const loop = loops.get(event.requestId === mainSpinnerId ? MAIN_LOOP : event.requestId);
-    if (!loop?.isEnabled || loop.effort === undefined) return next(event);
-    return next({ ...event, props: { ...event.props, suffix: `${event.props.suffix} sys1·${loop.effort}` } });
+    const hasError = loop !== undefined && (loop.failureCount > 0 || loop.blockReason !== undefined);
+    if (!loop?.isEnabled || (loop.effort === undefined && !hasError)) return next(event);
+    const label = `sys1·${loop.effort ?? ''}${hasError ? '·err' : ''}`;
+    return next({ ...event, props: { ...event.props, suffix: `${event.props.suffix} ${label}` } });
   });
 
   on('session.start', async ($, event, next) => {
@@ -402,7 +404,6 @@ export const register: Register = (on, options) => {
           if (generation === loop.generation && !next.signal.aborted && !('isCancelled' in result)) {
             if ('choice' in result) {
               Object.assign(loop, { effort: result.choice, acceptedStep: event.index, isDecisionDue: false, failureCount: 0, retryAt: 0 });
-              $.ui.invalidate('ui.render');
               loop.outcome = `accepted ${result.choice} at turn ${loop.turnCount}, step ${event.index} in ${completedAt - now} ms`;
             } else if (result.isPermanent) {
               loop.blockReason = `${profile.name}: ${result.failure}`;
@@ -410,6 +411,7 @@ export const register: Register = (on, options) => {
             } else {
               recordFailure(loop, completedAt, `${profile.name}: ${result.failure}`);
             }
+            $.ui.invalidate('ui.render');
           }
         }
       }
