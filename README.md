@@ -36,7 +36,9 @@ System1 Thinking chooses Claude Code reasoning effort before selected model requ
   - Select one with `profile`; unknown names are rejected.
   - Models, endpoints, and credential names are hard-coded in `hooks/register.ts`.
   - Failures never switch providers.
-- Optional `rubric_instructions` replaces the default rubric.
+- Optional `rubric_instructions` replaces selection and safety rules, not choice descriptions.
+  - Configure meanings with `lowEffortDescription`, `mediumEffortDescription`, `highEffortDescription`, and `xhighEffortDescription`.
+  - Both providers receive descriptions only for allowed choices.
   - Overrides must be nonblank and at most 4,096 UTF-8 bytes.
   - Keep evidence untrusted and require a supplied choice.
 - Configure through user settings or `--settings`, not project settings.

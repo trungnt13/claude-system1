@@ -2,6 +2,7 @@ import type { EngineInterface, Register, SessionMessage } from 'claude-code';
 
 type Effort = 'low' | 'medium' | 'high' | 'xhigh';
 type NativeEffort = Effort | 'max' | number | undefined;
+type EffortDescriptions = Readonly<Record<Effort, string>>;
 
 // Exclude max by policy.
 const EFFORT_LEVELS: readonly Effort[] = ['low', 'medium', 'high', 'xhigh'];
@@ -89,9 +90,9 @@ function resolveProfile(selected: unknown): DecisionProfile {
   throw new Error('System1 Thinking: profile must be jev or decision_api.');
 }
 
-function resolveRubric(value: unknown): string {
+function resolveInstructions(value: unknown, name: string): string {
   if (typeof value !== 'string' || value.trim() === '' || encoder.encode(value).length > 4096) {
-    throw new Error('System1 Thinking: rubric_instructions must be nonblank text of at most 4096 UTF-8 bytes.');
+    throw new Error(`System1 Thinking: ${name} must be nonblank text of at most 4096 UTF-8 bytes.`);
   }
   return value;
 }
@@ -108,18 +109,18 @@ function splitInputItems(input: string): string[] {
   return items;
 }
 
-function buildDecisionBody(profile: DecisionProfile, input: string, choices: readonly Effort[], rubricInstructions: string): string {
+function buildDecisionBody(profile: DecisionProfile, input: string, choices: readonly Effort[], rubricInstructions: string, effortDescriptions: EffortDescriptions): string {
   const items = splitInputItems(input);
   return JSON.stringify(profile.protocol === 'openai'
     ? {
       model: profile.model,
       input: items.map(text => ({ role: 'user', content: [{ type: 'input_text', text }] })),
-      questions: [{ type: 'choice', name: 'reasoning_effort', instructions: rubricInstructions, choices: choices.map(value => ({ value })) }],
+      questions: [{ type: 'choice', name: 'reasoning_effort', instructions: rubricInstructions, choices: choices.map(value => ({ value, description: effortDescriptions[value] })) }],
     }
     : {
       model: profile.model,
       state: items.length === 1 ? input : items,
-      questions: { reasoning_effort: { type: 'choice', instructions: rubricInstructions, criteria: Object.fromEntries(choices.map(choice => [choice, null])) } },
+      questions: { reasoning_effort: { type: 'choice', instructions: rubricInstructions, criteria: Object.fromEntries(choices.map(choice => [choice, effortDescriptions[choice]])) } },
     });
 }
 
@@ -155,7 +156,7 @@ function readApiKey($: EngineInterface, profile: DecisionProfile): Promise<strin
   return profile.apiKeyEnv === 'JEV_API_KEY' ? $.env.get('JEV_API_KEY') : $.env.get('DECISION_API_KEY');
 }
 
-type DecisionSettings = { profile: DecisionProfile; choices: readonly Effort[]; timeoutMs: number; rubricInstructions: string };
+type DecisionSettings = { profile: DecisionProfile; choices: readonly Effort[]; timeoutMs: number; rubricInstructions: string; effortDescriptions: EffortDescriptions };
 
 // Host fetch cannot cancel dispatched requests.
 async function requestDecision(
@@ -164,7 +165,7 @@ async function requestDecision(
   const { profile, choices, timeoutMs } = settings;
   const request = $.http.fetch(profile.url, {
     method: 'POST', headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
-    body: buildDecisionBody(profile, input, choices, settings.rubricInstructions),
+    body: buildDecisionBody(profile, input, choices, settings.rubricInstructions, settings.effortDescriptions),
   });
   const deadline = new AbortController();
   const outcome = await Promise.race([
@@ -180,7 +181,13 @@ async function requestDecision(
 
 export const register: Register = (on, options) => {
   const profile = resolveProfile(options.profile);
-  const rubricInstructions = resolveRubric(options.rubric_instructions);
+  const rubricInstructions = resolveInstructions(options.rubric_instructions, 'rubric_instructions');
+  const effortDescriptions: EffortDescriptions = {
+    low: resolveInstructions(options.lowEffortDescription, 'lowEffortDescription'),
+    medium: resolveInstructions(options.mediumEffortDescription, 'mediumEffortDescription'),
+    high: resolveInstructions(options.highEffortDescription, 'highEffortDescription'),
+    xhigh: resolveInstructions(options.xhighEffortDescription, 'xhighEffortDescription'),
+  };
   const isEnabledAtStart = options.enabled !== false;
   const minIndex = EFFORT_LEVELS.indexOf(options.minEffort as Effort);
   const maxIndex = EFFORT_LEVELS.indexOf(options.maxEffort as Effort);
@@ -189,7 +196,7 @@ export const register: Register = (on, options) => {
   const stepInterval = Number(options.stepInterval ?? 2);
   const timeoutMs = Number(options.timeoutMs ?? 2000);
   const evidenceBytes = Number(options.evidenceBytes ?? 8192);
-  const decisionSettings: DecisionSettings = { profile, choices: boundedChoices, timeoutMs, rubricInstructions };
+  const decisionSettings: DecisionSettings = { profile, choices: boundedChoices, timeoutMs, rubricInstructions, effortDescriptions };
   const adaptsSubagents = options.subagents === true;
   let mainSpinnerId: string;
   const loops = new Map<string, LoopState>();
