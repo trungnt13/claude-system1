@@ -6,12 +6,25 @@ type NativeEffort = Effort | 'max' | number | undefined;
 // Exclude max by policy.
 const EFFORT_LEVELS: readonly Effort[] = ['low', 'medium', 'high', 'xhigh'];
 const MAIN_LOOP = 'main';
+const ROLE_EFFORT_LIMITS = new Map<string, readonly [Effort, Effort]>([
+  ['reviewer', ['high', 'xhigh']],
+  ['tngo-reviewer', ['high', 'xhigh']],
+  ['implementer', ['low', 'high']],
+  ['general-purpose', ['low', 'high']],
+  ['worker', ['low', 'high']],
+  ['claude', ['low', 'high']],
+  ['statusline-setup', ['low', 'high']],
+  ['tngo-opus', ['low', 'high']],
+  ['tngo-sonnet', ['low', 'high']],
+]);
 const RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 16000, 30000];
 
 type LoopState = {
   isEnabled: boolean;
   generation: number;
   effort?: Effort;
+  role?: string;
+  choices: readonly Effort[];
   nativeModel?: string;
   nativeEffort?: NativeEffort;
   turnId: string;
@@ -187,7 +200,7 @@ export const register: Register = (on, options) => {
 
   function createLoop(isEnabled: boolean): LoopState {
     return {
-      isEnabled, generation: 0, turnId: '', turnCount: 0, isTurnSelected: false, isDecisionDue: isEnabled,
+      isEnabled, choices: boundedChoices, generation: 0, turnId: '', turnCount: 0, isTurnSelected: false, isDecisionDue: isEnabled,
       task: '', steer: '', failureCount: 0, retryAt: 0, decisionCount: 0, outcome: isEnabled ? 'on at loop start' : 'off',
     };
   }
@@ -221,7 +234,7 @@ export const register: Register = (on, options) => {
     const isInactive = loop.isEnabled && loop.nativeModel !== undefined && !isAdaptableEffort(loop.nativeEffort);
     return `System1 Thinking ${state}${isInactive ? ' (inactive: native effort is not an adjustable level)' : ''}; `
       + `effort ${loop.effort ?? `native (${loop.nativeEffort ?? 'unknown'})`}; `
-      + `choices ${boundedChoices.join('/')}; controller ${profile.name} (${profile.model}); decisions ${loop.decisionCount}; last: ${loop.outcome}.`;
+      + `choices ${loop.choices.join('/')}; controller ${profile.name} (${profile.model}); decisions ${loop.decisionCount}; last: ${loop.outcome}.`;
   }
 
   on('ui.render', { component: 'Spinner' }, ($, event, next) => {
@@ -340,6 +353,33 @@ export const register: Register = (on, options) => {
     const isDue = loop.isDecisionDue
       || (loop.isTurnSelected && (loop.acceptedStep === undefined || event.index - loop.acceptedStep >= stepInterval));
     if (!loop.isEnabled || !isAdaptableEffort(event.effort)) return yield* next(event);
+    if (event.agentId !== undefined && loop.role === undefined) {
+      const generation = loop.generation;
+      const role = (await $.agent.list()).find(agent => agent.id === event.agentId)?.type;
+      if (generation !== loop.generation || loops.get(loopId) !== loop || next.signal.aborted) return yield* next(event);
+      if (role !== undefined) {
+        const limits = ROLE_EFFORT_LIMITS.get(role);
+        const choices = limits === undefined ? boundedChoices : boundedChoices.filter(choice =>
+          EFFORT_LEVELS.indexOf(choice) >= EFFORT_LEVELS.indexOf(limits[0])
+          && EFFORT_LEVELS.indexOf(choice) <= EFFORT_LEVELS.indexOf(limits[1]));
+        if (choices.length === 0) {
+          const answer = `System1 Thinking: global effort bounds conflict with role ${role}; adjust minEffort/maxEffort or disable System1.`;
+          $.ui.toast(answer);
+          // Hook exceptions fail open; a result without next prevents dispatch.
+          return { turnId: event.turnId, index: event.index, answer, toolUses: [], stopReason: 'end_turn', usage: null };
+        }
+        Object.assign(loop, { role, choices });
+      }
+    }
+    if (loop.role !== undefined && ROLE_EFFORT_LIMITS.has(loop.role)) {
+      const index = EFFORT_LEVELS.indexOf(loop.effort ?? event.effort);
+      loop.effort = EFFORT_LEVELS[Math.max(EFFORT_LEVELS.indexOf(loop.choices[0]!), Math.min(index, EFFORT_LEVELS.indexOf(loop.choices.at(-1)!)))]!;
+      $.ui.invalidate('ui.render');
+    }
+    if (loop.choices.length === 1) {
+      loop.effort = loop.choices[0]!;
+      return yield* next({ ...event, effort: loop.effort });
+    }
     const now = await $.clock.now();
     if (loop.blockReason === undefined && isDue && now >= loop.retryAt) {
       const generation = loop.generation;
@@ -351,7 +391,7 @@ export const register: Register = (on, options) => {
           let result: DecisionResult = { failure: `${profile.apiKeyEnv} is missing or empty`, isPermanent: true };
           if (apiKey !== undefined && apiKey.trim() !== '') {
             loop.decisionCount++;
-            result = await requestDecision($, decisionSettings, apiKey, collectEvidence(loop, rows, evidenceBytes), next.signal);
+            result = await requestDecision($, { ...decisionSettings, choices: loop.choices }, apiKey, collectEvidence(loop, rows, evidenceBytes), next.signal);
           }
           const completedAt = await $.clock.now();
           // Discard stale results without counting failures.
