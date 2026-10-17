@@ -71,7 +71,7 @@ System1 Thinking chooses Claude Code reasoning effort before selected model requ
   - `evidenceBytes`: 8,192 bytes; allowed range 128–32,768.
   - `subagents`: true; children inherit the main loop's enabled flag once.
   - Hard-coded reviewer limits: `reviewer` uses high–xhigh.
-  - Implementer limits: `implementer`, `general-purpose`, `worker`, `claude`, `statusline-setup`, `tngo-opus`, `tngo-sonnet` use low–high.
+  - Implementer limits: `implementer`, `general-purpose`, `worker`, `claude`, `statusline-setup` use low–high.
   - Role limits intersect global bounds; empty intersections stop matching requests.
   - Role-limited fallbacks stay within bounds; single-choice role ranges skip provider requests.
   - Other or unidentified roles inherit global limits; disabled System1 restores native effort.

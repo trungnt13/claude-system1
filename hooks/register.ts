@@ -13,8 +13,6 @@ const ROLE_EFFORT_LIMITS = new Map<string, readonly [Effort, Effort]>([
   ['worker', ['low', 'high']],
   ['claude', ['low', 'high']],
   ['statusline-setup', ['low', 'high']],
-  ['tngo-opus', ['low', 'high']],
-  ['tngo-sonnet', ['low', 'high']],
 ]);
 const RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 16000, 30000];
 
