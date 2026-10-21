@@ -194,7 +194,7 @@ export const register: Register = (on, options) => {
   const boundedChoices = EFFORT_LEVELS.slice(Math.max(minIndex, 0), (maxIndex < 0 ? EFFORT_LEVELS.length - 1 : maxIndex) + 1);
   const turnInterval = Number(options.turnInterval ?? 1);
   const stepInterval = Number(options.stepInterval ?? 2);
-  const timeoutMs = Number(options.timeoutMs ?? 2000);
+  const timeoutMs = Number(options.timeoutMs ?? 3000);
   const evidenceBytes = Number(options.evidenceBytes ?? 8192);
   const decisionSettings: DecisionSettings = { profile, choices: boundedChoices, timeoutMs, rubricInstructions, effortDescriptions };
   const adaptsSubagents = options.subagents === true;

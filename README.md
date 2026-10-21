@@ -71,7 +71,7 @@ System1 Thinking chooses Claude Code reasoning effort before selected model requ
   - Effort choices require at least two levels between low and xhigh.
   - Native max, numeric, or absent effort remains unchanged.
   - Both intervals accept 1–100; step spacing counts model steps since the last accepted decision.
-  - `timeoutMs`: 2,000 milliseconds; allowed range 1–5,000.
+  - `timeoutMs`: 3,000 milliseconds; allowed range 1–5,000.
   - `evidenceBytes`: 8,192 bytes; allowed range 128–32,768.
   - `subagents`: true; children inherit the main loop's enabled flag once.
   - Hard-coded reviewer limits: `reviewer` uses high–xhigh.
