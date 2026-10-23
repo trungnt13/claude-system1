@@ -145,10 +145,26 @@ function parseDecisionAnswer(profile: DecisionProfile, text: string, choices: re
 }
 
 function classifyDecisionResponse(profile: DecisionProfile, status: number, text: string, choices: readonly Effort[]): DecisionResult {
-  if (status < 200 || status >= 300) return { failure: `HTTP ${status}`, isPermanent: status >= 400 && status < 500 && status !== 408 && status !== 429 };
-  if (encoder.encode(text).length > MAX_RESPONSE_BYTES) return { failure: 'response exceeds 16 KiB', isPermanent: false };
+  if (status < 200 || status >= 300) {
+    const details: string[] = [];
+    if (encoder.encode(text).length <= MAX_RESPONSE_BYTES) {
+      try {
+        const error: unknown = (JSON.parse(text) as { error?: unknown } | null)?.error;
+        if (error !== null && typeof error === 'object') {
+          for (const field of ['type', 'code'] as const) {
+            const value = (error as Record<string, unknown>)[field];
+            if (typeof value === 'string' && /^[a-zA-Z][a-zA-Z0-9_.-]{0,63}$/.test(value)) details.push(`${field}=${value}`);
+          }
+        }
+      } catch {
+        // Non-JSON error bodies still retain their HTTP status.
+      }
+    }
+    return { failure: `HTTP ${status}${details.length ? ` (${details.join(', ')})` : ''}`, isPermanent: status >= 400 && status < 500 && status !== 408 && status !== 429 };
+  }
+  if (encoder.encode(text).length > MAX_RESPONSE_BYTES) return { failure: 'response_size: exceeds 16 KiB', isPermanent: false };
   const choice = parseDecisionAnswer(profile, text, choices);
-  return choice === undefined ? { failure: 'invalid answer', isPermanent: false } : { choice };
+  return choice === undefined ? { failure: 'invalid_response: missing or unsupported choice', isPermanent: false } : { choice };
 }
 
 // Host permissions require literal environment names.
@@ -169,8 +185,8 @@ async function requestDecision(
   });
   const deadline = new AbortController();
   const outcome = await Promise.race([
-    request.then(response => ({ response }), () => ({ failure: 'transport failed' })),
-    $.clock.sleep(timeoutMs, { signal: deadline.signal }).then(() => ({ failure: `timed out after ${timeoutMs} ms` }), () => ({ failure: 'deadline stopped' })),
+    request.then(response => ({ response }), () => ({ failure: 'transport: request failed' })),
+    $.clock.sleep(timeoutMs, { signal: deadline.signal }).then(() => ({ failure: `timeout: timed out after ${timeoutMs} ms` }), () => ({ failure: 'cancelled: deadline stopped' })),
     new Promise<{ isCancelled: true }>(resolve => signal.addEventListener('abort', () => resolve({ isCancelled: true }), { once: true })),
   ]);
   deadline.abort();
@@ -226,7 +242,7 @@ export const register: Register = (on, options) => {
   function recordFailure(loop: LoopState, now: number, reason: string): void {
     loop.retryAt = now + RETRY_DELAYS_MS[Math.min(loop.failureCount, RETRY_DELAYS_MS.length - 1)]!;
     loop.failureCount++;
-    loop.outcome = `${reason}; keeping ${loop.effort ?? 'native'} effort, retry after cooldown`;
+    loop.outcome = `${reason}; fallback ${loop.effort ?? 'native'} effort; retry after cooldown`;
   }
 
   function setAllEnabled(isEnabled: boolean, outcome: string): void {
@@ -377,9 +393,11 @@ export const register: Register = (on, options) => {
         Object.assign(loop, { role, choices });
       }
     }
+    let fallbackEffort: Effort | undefined;
     if (loop.role !== undefined && ROLE_EFFORT_LIMITS.has(loop.role)) {
-      const index = EFFORT_LEVELS.indexOf(loop.effort ?? event.effort);
-      loop.effort = EFFORT_LEVELS[Math.max(EFFORT_LEVELS.indexOf(loop.choices[0]!), Math.min(index, EFFORT_LEVELS.indexOf(loop.choices.at(-1)!)))]!;
+      const clampEffort = (effort: Effort): Effort => EFFORT_LEVELS[Math.max(EFFORT_LEVELS.indexOf(loop.choices[0]!), Math.min(EFFORT_LEVELS.indexOf(effort), EFFORT_LEVELS.indexOf(loop.choices.at(-1)!)))]!;
+      fallbackEffort = clampEffort(event.effort);
+      loop.effort = clampEffort(loop.effort ?? event.effort);
       $.ui.invalidate('ui.render');
     }
     if (loop.choices.length === 1) {
@@ -394,7 +412,7 @@ export const register: Register = (on, options) => {
         if (loop.task === '') loop.task = truncateUtf8(rows.findLast(row => row.role === 'user' && row.text !== '')?.text ?? '', evidenceBytes / 3);
         if (loop.task !== '' && generation === loop.generation && !next.signal.aborted) {
           const apiKey = await readApiKey($, profile);
-          let result: DecisionResult = { failure: `${profile.apiKeyEnv} is missing or empty`, isPermanent: true };
+          let result: DecisionResult = { failure: `credentials: ${profile.apiKeyEnv} is missing or empty`, isPermanent: true };
           if (apiKey !== undefined && apiKey.trim() !== '') {
             loop.decisionCount++;
             result = await requestDecision($, { ...decisionSettings, choices: loop.choices }, apiKey, collectEvidence(loop, rows, evidenceBytes), next.signal);
@@ -405,11 +423,14 @@ export const register: Register = (on, options) => {
             if ('choice' in result) {
               Object.assign(loop, { effort: result.choice, acceptedStep: event.index, isDecisionDue: false, failureCount: 0, retryAt: 0 });
               loop.outcome = `accepted ${result.choice} at turn ${loop.turnCount}, step ${event.index} in ${completedAt - now} ms`;
-            } else if (result.isPermanent) {
-              loop.blockReason = `${profile.name}: ${result.failure}`;
-              loop.outcome = `${loop.blockReason}; run /system1 on after fixing it`;
             } else {
-              recordFailure(loop, completedAt, `${profile.name}: ${result.failure}`);
+              loop.effort = fallbackEffort;
+              if (result.isPermanent) {
+                loop.blockReason = `${profile.name}: ${result.failure}`;
+                loop.outcome = `${loop.blockReason}; run /system1 on after fixing it`;
+              } else {
+                recordFailure(loop, completedAt, `${profile.name}: ${result.failure}`);
+              }
             }
             $.ui.invalidate('ui.render');
           }

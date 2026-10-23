@@ -77,13 +77,16 @@ System1 Thinking chooses Claude Code reasoning effort before selected model requ
   - Hard-coded reviewer limits: `reviewer` uses high–xhigh.
   - Implementer limits: `implementer`, `general-purpose`, `worker`, `claude`, `statusline-setup` use low–high.
   - Role limits intersect global bounds; empty intersections stop matching requests.
-  - Role-limited fallbacks stay within bounds; single-choice role ranges skip provider requests.
+  - Failed decisions restore Claude’s configured effort, clamped to role limits, throughout cooldowns.
+  - Single-choice role ranges skip provider requests.
   - Other or unidentified roles inherit global limits; disabled System1 restores native effort.
   - Option changes reload state and apply startup settings.
 - Providers receive task, steering, and recent conversation excerpts, including tool-result text.
   - Evidence is not secret-redacted; trust your provider.
   - Replies must contain exactly one supplied choice.
-- Failures retain current effort; transient retries use exponential cooldown, capped at 30 seconds.
+- Failures restore configured effort; transient retries use exponential cooldown, capped at 30 seconds.
+  - Status includes failure category, HTTP status, and short provider error types/codes when available.
+  - Raw provider messages and response bodies are omitted.
   - Missing keys and permanent client errors block decisions until re-enabled.
   - Timeouts cannot cancel dispatched requests; retries may overlap and incur charges.
   - No spending cap exists.
