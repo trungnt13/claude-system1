@@ -41,6 +41,7 @@ System1 Thinking chooses Claude Code reasoning effort before selected model requ
 - Optional `rubric_instructions` replaces selection and safety rules, not choice descriptions.
   - Configure meanings with `lowEffortDescription`, `mediumEffortDescription`, `highEffortDescription`, and `xhighEffortDescription`.
   - Both providers receive descriptions only for allowed choices.
+  - Both providers receive the configured baseline separately from untrusted task evidence.
   - Overrides must be nonblank and at most 4,096 UTF-8 bytes.
   - Keep evidence untrusted and require a supplied choice.
 - Configure through user settings or `--settings`, not project settings.

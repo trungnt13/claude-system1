@@ -415,7 +415,10 @@ export const register: Register = (on, options) => {
           let result: DecisionResult = { failure: `credentials: ${profile.apiKeyEnv} is missing or empty`, isPermanent: true };
           if (apiKey !== undefined && apiKey.trim() !== '') {
             loop.decisionCount++;
-            result = await requestDecision($, { ...decisionSettings, choices: loop.choices }, apiKey, collectEvidence(loop, rows, evidenceBytes), next.signal);
+            result = await requestDecision($, {
+              ...decisionSettings, choices: loop.choices,
+              rubricInstructions: `${rubricInstructions}\nConfigured reasoning baseline: ${event.effort}.`,
+            }, apiKey, collectEvidence(loop, rows, evidenceBytes), next.signal);
           }
           const completedAt = await $.clock.now();
           // Discard stale results without counting failures.
