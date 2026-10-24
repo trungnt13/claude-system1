@@ -366,13 +366,10 @@ export const register: Register = (on, options) => {
       $.ui.invalidate('ui.render');
     }
 
-    if (loop.isEnabled && loop.nativeModel !== undefined && event.model !== loop.nativeModel) {
-      setEnabled(loop, false, `paused: native model changed to ${event.model}`);
-      $.ui.invalidate('ui.render');
-    } else if (loop.isEnabled && loop.nativeModel !== undefined && event.effort !== loop.nativeEffort) {
+    if (loop.isEnabled && loop.nativeModel !== undefined && (event.model !== loop.nativeModel || event.effort !== loop.nativeEffort)) {
       Object.assign(loop, {
         generation: loop.generation + 1, effort: undefined, acceptedStep: undefined, isDecisionDue: true,
-        outcome: `baseline changed to ${event.effort ?? 'none'}`,
+        outcome: `native settings changed to ${event.model}/${event.effort ?? 'none'}`,
       });
       $.ui.invalidate('ui.render');
     }
