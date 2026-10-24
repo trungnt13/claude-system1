@@ -25,7 +25,8 @@ System1 Thinking chooses Claude Code reasoning effort before selected model requ
 
 - `/system1` toggles adaptation; arguments are `on`, `off`, or `status`.
   - `off` disables existing subagents too.
-  - Native model or effort changes pause adaptation.
+  - Native model changes pause adaptation; effort changes update the baseline without disabling System1.
+  - Effort changes clear previous decisions and bypass cadence; existing failure cooldowns still apply.
   - Accepted effort lasts only within its turn.
   - The spinner appends `sys1·low`, `sys1·medium`, `sys1·high`, or `sys1·xhigh`.
   - Decision failures append `·err`; the next accepted decision clears it.
